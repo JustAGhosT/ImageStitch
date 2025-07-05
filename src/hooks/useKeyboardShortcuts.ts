@@ -3,8 +3,22 @@
 import { useEffect } from "react"
 import { useAppStore } from "@/src/store/useAppStore"
 
-export const useKeyboardShortcuts = () => {
-  const { updateUI, undo, redo, ui, setComparisonMode } = useAppStore()
+export function useKeyboardShortcuts() {
+  const {
+    setCurrentTool,
+    setZoom,
+    zoom,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    setComparisonMode,
+    comparisonMode,
+    setViewMode,
+    viewMode,
+    setShowGrid,
+    showGrid,
+  } = useAppStore()
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -17,150 +31,237 @@ export const useKeyboardShortcuts = () => {
         return
       }
 
-      const { ctrlKey, metaKey, shiftKey, key } = event
+      const { key, ctrlKey, metaKey, shiftKey, altKey } = event
       const isModifierPressed = ctrlKey || metaKey
 
-      // File operations
+      // Tool shortcuts
+      switch (key.toLowerCase()) {
+        case "v":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setCurrentTool("select")
+          }
+          break
+        case "b":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setCurrentTool("draw")
+          }
+          break
+        case "m":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setCurrentTool("measure")
+          }
+          break
+        case "h":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setCurrentTool("flip-h")
+          }
+          break
+        case "r":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            if (shiftKey) {
+              setCurrentTool("rotate-ccw")
+            } else {
+              setCurrentTool("rotate-cw")
+            }
+          }
+          break
+        case "c":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setCurrentTool("crop")
+          }
+          break
+      }
+
+      // Zoom shortcuts
+      if (isModifierPressed) {
+        switch (key) {
+          case "=":
+          case "+":
+            event.preventDefault()
+            setZoom(Math.min(zoom * 1.2, 5))
+            break
+          case "-":
+            event.preventDefault()
+            setZoom(Math.max(zoom / 1.2, 0.1))
+            break
+          case "0":
+            event.preventDefault()
+            setZoom(1)
+            break
+        }
+      }
+
+      // History shortcuts
       if (isModifierPressed) {
         switch (key.toLowerCase()) {
           case "z":
             event.preventDefault()
-            if (shiftKey) {
+            if (shiftKey && canRedo) {
               redo()
-            } else {
+            } else if (canUndo) {
               undo()
             }
             break
           case "y":
-            event.preventDefault()
-            redo()
-            break
-          case "s":
-            event.preventDefault()
-            // Save functionality would go here
-            console.log("Save shortcut triggered")
-            break
-          case "o":
-            event.preventDefault()
-            // Open functionality would go here
-            console.log("Open shortcut triggered")
-            break
-          case "n":
-            event.preventDefault()
-            // New project functionality would go here
-            console.log("New project shortcut triggered")
-            break
-          case "e":
-            event.preventDefault()
-            // Export functionality would go here
-            console.log("Export shortcut triggered")
+            if (canRedo) {
+              event.preventDefault()
+              redo()
+            }
             break
         }
-        return
       }
 
-      // Tool shortcuts (without modifier keys)
+      // Comparison mode shortcuts
+      if (altKey) {
+        switch (key) {
+          case "1":
+            event.preventDefault()
+            setComparisonMode("single")
+            break
+          case "2":
+            event.preventDefault()
+            setComparisonMode("side-by-side")
+            break
+          case "3":
+            event.preventDefault()
+            setComparisonMode("overlay")
+            break
+          case "4":
+            event.preventDefault()
+            setComparisonMode("split")
+            break
+          case "5":
+            event.preventDefault()
+            setComparisonMode("difference")
+            break
+        }
+      }
+
+      // View shortcuts
       switch (key.toLowerCase()) {
-        case "v":
-          event.preventDefault()
-          updateUI({ selectedTool: "move" })
-          break
-        case "r":
-          event.preventDefault()
-          updateUI({ selectedTool: "rectangle" })
-          break
-        case "c":
-          event.preventDefault()
-          updateUI({ selectedTool: "circle" })
-          break
-        case "p":
-          event.preventDefault()
-          updateUI({ selectedTool: "pen" })
-          break
-        case "t":
-          event.preventDefault()
-          updateUI({ selectedTool: "text" })
-          break
-        case "m":
-          event.preventDefault()
-          updateUI({ selectedTool: "measurement" })
-          break
-        case "i":
-          event.preventDefault()
-          updateUI({ selectedTool: "colorPicker" })
+        case "tab":
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setViewMode(viewMode === "single" ? "split" : "single")
+          }
           break
         case "g":
-          event.preventDefault()
-          updateUI({ showGrid: !ui.showGrid })
+          if (!isModifierPressed) {
+            event.preventDefault()
+            setShowGrid(!showGrid)
+          }
           break
-        case "=":
-        case "+":
+        case " ":
           event.preventDefault()
-          updateUI({ zoom: Math.min(400, ui.zoom + 25) })
+          setCurrentTool("pan")
           break
-        case "-":
-          event.preventDefault()
-          updateUI({ zoom: Math.max(25, ui.zoom - 25) })
-          break
-        case "0":
-          event.preventDefault()
-          updateUI({ zoom: 100 })
-          break
-        case "1":
-          event.preventDefault()
-          setComparisonMode("overlay")
-          break
-        case "2":
-          event.preventDefault()
-          setComparisonMode("split")
-          break
-        case "3":
-          event.preventDefault()
-          setComparisonMode("slider")
-          break
-        case "f1":
+      }
+
+      // Function key shortcuts
+      switch (key) {
+        case "F1":
           event.preventDefault()
           // Show help modal
-          console.log("Help shortcut triggered")
           break
-        case "escape":
+        case "F11":
           event.preventDefault()
-          updateUI({ selectedTool: "move" })
+          // Toggle fullscreen
+          break
+        case "Escape":
+          event.preventDefault()
+          setCurrentTool("select")
           break
       }
     }
 
-    // Add event listener
-    document.addEventListener("keydown", handleKeyDown)
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Reset pan tool when spacebar is released
+      if (event.key === " ") {
+        setCurrentTool("select")
+      }
+    }
 
-    // Cleanup
+    document.addEventListener("keydown", handleKeyDown)
+    document.addEventListener("keyup", handleKeyUp)
+
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
+      document.removeEventListener("keyup", handleKeyUp)
     }
-  }, [updateUI, undo, redo, ui, setComparisonMode])
+  }, [
+    setCurrentTool,
+    setZoom,
+    zoom,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    setComparisonMode,
+    comparisonMode,
+    setViewMode,
+    viewMode,
+    setShowGrid,
+    showGrid,
+  ])
 
-  // Return keyboard shortcut info for help display
+  // Return keyboard shortcut information for help display
   return {
     shortcuts: [
-      { key: "V", description: "Move tool" },
-      { key: "R", description: "Rectangle tool" },
-      { key: "C", description: "Circle tool" },
-      { key: "P", description: "Pen tool" },
-      { key: "T", description: "Text tool" },
-      { key: "M", description: "Measurement tool" },
-      { key: "I", description: "Color picker tool" },
-      { key: "G", description: "Toggle grid" },
-      { key: "+/-", description: "Zoom in/out" },
-      { key: "0", description: "Reset zoom" },
-      { key: "1/2/3", description: "Comparison modes" },
-      { key: "Ctrl+Z", description: "Undo" },
-      { key: "Ctrl+Y", description: "Redo" },
-      { key: "Ctrl+S", description: "Save" },
-      { key: "Ctrl+O", description: "Open" },
-      { key: "Ctrl+N", description: "New project" },
-      { key: "Ctrl+E", description: "Export" },
-      { key: "F1", description: "Help" },
-      { key: "Escape", description: "Select move tool" },
+      {
+        category: "Tools",
+        shortcuts: [
+          { key: "V", description: "Select tool" },
+          { key: "B", description: "Draw tool" },
+          { key: "M", description: "Measure tool" },
+          { key: "H", description: "Flip horizontal" },
+          { key: "R", description: "Rotate right" },
+          { key: "Shift+R", description: "Rotate left" },
+          { key: "C", description: "Crop tool" },
+          { key: "Space", description: "Pan tool (hold)" },
+        ],
+      },
+      {
+        category: "Zoom",
+        shortcuts: [
+          { key: "Ctrl/Cmd + +", description: "Zoom in" },
+          { key: "Ctrl/Cmd + -", description: "Zoom out" },
+          { key: "Ctrl/Cmd + 0", description: "Reset zoom" },
+        ],
+      },
+      {
+        category: "History",
+        shortcuts: [
+          { key: "Ctrl/Cmd + Z", description: "Undo" },
+          { key: "Ctrl/Cmd + Shift + Z", description: "Redo" },
+          { key: "Ctrl/Cmd + Y", description: "Redo" },
+        ],
+      },
+      {
+        category: "Comparison",
+        shortcuts: [
+          { key: "Alt + 1", description: "Single view" },
+          { key: "Alt + 2", description: "Side by side" },
+          { key: "Alt + 3", description: "Overlay" },
+          { key: "Alt + 4", description: "Split view" },
+          { key: "Alt + 5", description: "Difference" },
+        ],
+      },
+      {
+        category: "View",
+        shortcuts: [
+          { key: "Tab", description: "Toggle view mode" },
+          { key: "G", description: "Toggle grid" },
+          { key: "Esc", description: "Reset to select tool" },
+          { key: "F1", description: "Show help" },
+          { key: "F11", description: "Toggle fullscreen" },
+        ],
+      },
     ],
   }
 }

@@ -1,73 +1,95 @@
 "use client"
-
-import type React from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+import { Square, Columns2, Layers, SplitSquareHorizontal, Diff, Eye } from "lucide-react"
 import { useAppStore } from "@/src/store/useAppStore"
-import { cn } from "@/lib/utils"
-import { Layers, Split, FileSlidersIcon as Slider } from "lucide-react"
 
-interface ComparisonModeSelectorProps {
-  className?: string
-}
+const comparisonModes = [
+  {
+    id: "single",
+    label: "Single View",
+    icon: Square,
+    description: "View one image at a time",
+    shortcut: "Alt+1",
+  },
+  {
+    id: "side-by-side",
+    label: "Side by Side",
+    icon: Columns2,
+    description: "Compare images side by side",
+    shortcut: "Alt+2",
+  },
+  {
+    id: "overlay",
+    label: "Overlay",
+    icon: Layers,
+    description: "Overlay images with opacity control",
+    shortcut: "Alt+3",
+  },
+  {
+    id: "split",
+    label: "Split View",
+    icon: SplitSquareHorizontal,
+    description: "Split screen comparison",
+    shortcut: "Alt+4",
+  },
+  {
+    id: "difference",
+    label: "Difference",
+    icon: Diff,
+    description: "Highlight differences between images",
+    shortcut: "Alt+5",
+  },
+] as const
 
-export const ComparisonModeSelector: React.FC<ComparisonModeSelectorProps> = ({ className }) => {
-  const { comparisonMode, setComparisonMode } = useAppStore()
+export function ComparisonModeSelector() {
+  const { comparisonMode, setComparisonMode, images } = useAppStore()
 
-  const modes = [
-    {
-      id: "overlay" as const,
-      name: "Overlay",
-      description: "Layer images on top of each other",
-      icon: Layers,
-      shortcut: "1",
-    },
-    {
-      id: "split" as const,
-      name: "Split View",
-      description: "Show images side by side",
-      icon: Split,
-      shortcut: "2",
-    },
-    {
-      id: "slider" as const,
-      name: "Slider",
-      description: "Interactive comparison slider",
-      icon: Slider,
-      shortcut: "3",
-    },
-  ]
+  const handleModeChange = (mode: typeof comparisonMode) => {
+    setComparisonMode(mode)
+  }
 
   return (
-    <Card className={cn("bg-[#0B1120]/50 border-[#00E5FF]/20", className)}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm text-[#00E5FF]">Comparison Mode</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {modes.map((mode) => (
-          <Button
-            key={mode.id}
-            variant={comparisonMode === mode.id ? "default" : "outline"}
-            size="sm"
-            onClick={() => setComparisonMode(mode.id)}
-            className={cn(
-              "w-full justify-start text-xs h-auto p-3",
-              comparisonMode === mode.id
-                ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent hover:bg-[#00E5FF]/10",
-            )}
-          >
-            <div className="flex items-center space-x-3 w-full">
-              <mode.icon className="w-4 h-4 shrink-0" />
-              <div className="flex-1 text-left">
-                <div className="font-medium">{mode.name}</div>
-                <div className="text-xs opacity-70">{mode.description}</div>
+    <div className="space-y-3">
+      {comparisonModes.map((mode) => (
+        <Card
+          key={mode.id}
+          className={`cursor-pointer transition-all duration-200 ${
+            comparisonMode === mode.id ? "ring-2 ring-blue-500 bg-blue-50" : "hover:bg-gray-50"
+          }`}
+          onClick={() => handleModeChange(mode.id)}
+        >
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div
+                  className={`p-2 rounded-lg ${
+                    comparisonMode === mode.id ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  <mode.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-medium text-sm">{mode.label}</div>
+                  <div className="text-xs text-gray-500">{mode.description}</div>
+                </div>
               </div>
-              <div className="text-xs opacity-50 font-mono">{mode.shortcut}</div>
+              <div className="flex items-center space-x-2">
+                <Badge variant="outline" className="text-xs">
+                  {mode.shortcut}
+                </Badge>
+                {comparisonMode === mode.id && <Eye className="h-4 w-4 text-blue-600" />}
+              </div>
             </div>
-          </Button>
-        ))}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      ))}
+
+      {images.length < 2 && comparisonMode !== "single" && (
+        <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+          Upload at least 2 images to use comparison modes
+        </div>
+      )}
+    </div>
   )
 }

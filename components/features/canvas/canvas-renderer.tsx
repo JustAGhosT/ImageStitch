@@ -1,217 +1,356 @@
 "use client"
 
 import type React from "react"
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { useAppStore } from "@/src/store/useAppStore"
-import { useKeyboardShortcuts } from "@/src/hooks/useKeyboardShortcuts"
-import { cn } from "@/lib/utils"
-import { Upload, ImageIcon } from "lucide-react"
 
-interface CanvasRendererProps {
-  className?: string
+interface Point {
+  x: number
+  y: number
 }
 
-export const CanvasRenderer: React.FC<CanvasRendererProps> = ({ className }) => {
+export function CanvasRenderer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isPanning, setIsPanning] = useState(false)
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [lastPanPoint, setLastPanPoint] = useState<Point>({ x: 0, y: 0 })
+  const [lastDrawPoint, setLastDrawPoint] = useState<Point>({ x: 0, y: 0 })
 
   const {
     images,
+    zoom,
+    panOffset,
+    setPanOffset,
+    currentTool,
     comparisonMode,
-    ui: { zoom, showGrid, selectedTool },
-    updateUI,
+    showGrid,
+    drawingColor,
+    strokeWidth,
+    opacity,
+    viewMode,
   } = useAppStore()
 
-  // Enable keyboard shortcuts
-  useKeyboardShortcuts()
+  // Canvas dimensions
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 })
 
-  // Handle canvas drawing
+  // Update canvas size on container resize
   useEffect(() => {
+    const updateCanvasSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setCanvasSize({
+          width: rect.width,
+          height: rect.height,
+        })
+      }
+    }
+
+    updateCanvasSize()
+    window.addEventListener("resize", updateCanvasSize)
+    return () => window.removeEventListener("resize", updateCanvasSize)
+  }, [])
+
+  // Main render function
+  const render = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
     // Set canvas size
-    const container = containerRef.current
-    if (container) {
-      canvas.width = container.clientWidth
-      canvas.height = container.clientHeight
-    }
+    canvas.width = canvasSize.width
+    canvas.height = canvasSize.height
 
-    // Apply zoom and pan transforms
+    // Clear canvas
+    ctx.fillStyle = "#f8f9fa"
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // Apply zoom and pan transformations
     ctx.save()
-    ctx.scale(zoom / 100, zoom / 100)
     ctx.translate(panOffset.x, panOffset.y)
+    ctx.scale(zoom, zoom)
 
     // Draw grid if enabled
     if (showGrid) {
-      drawGrid(ctx, canvas.width, canvas.height)
+      drawGrid(ctx)
     }
 
     // Draw images based on comparison mode
     if (images.length > 0) {
-      drawImages(ctx, images, comparisonMode)
-    }
-
-    ctx.restore()
-  }, [images, comparisonMode, zoom, showGrid, panOffset])
-
-  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    const gridSize = 20
-    ctx.strokeStyle = "#00E5FF"
-    ctx.globalAlpha = 0.1
-    ctx.lineWidth = 1
-
-    for (let x = 0; x <= width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, height)
-      ctx.stroke()
-    }
-
-    for (let y = 0; y <= height; y += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(0, y)
-      ctx.lineTo(width, y)
-      ctx.stroke()
-    }
-
-    ctx.globalAlpha = 1
-  }
-
-  const drawImages = (ctx: CanvasRenderingContext2D, imageList: any[], mode: string) => {
-    // Simple placeholder rendering - in a real app, you'd load and draw actual images
-    const centerX = ctx.canvas.width / 2
-    const centerY = ctx.canvas.height / 2
-    const imageWidth = 300
-    const imageHeight = 200
-
-    // Draw first image
-    if (imageList.length > 0) {
-      ctx.fillStyle = "#00E5FF"
-      ctx.globalAlpha = 0.4
-      ctx.fillRect(centerX - imageWidth / 2 - 20, centerY - imageHeight / 2 - 20, imageWidth, imageHeight)
-    }
-
-    // Draw second image with different positioning based on mode
-    if (imageList.length > 1) {
-      ctx.fillStyle = "#FF4DA3"
-      ctx.globalAlpha = 0.4
-
-      switch (mode) {
+      switch (comparisonMode) {
+        case "side-by-side":
+          drawSideBySide(ctx)
+          break
         case "overlay":
-          ctx.fillRect(centerX - imageWidth / 2 + 20, centerY - imageHeight / 2 + 20, imageWidth, imageHeight)
+          drawOverlay(ctx)
           break
         case "split":
-          ctx.fillRect(centerX + 10, centerY - imageHeight / 2, imageWidth, imageHeight)
+          drawSplit(ctx)
           break
-        case "slider":
-          ctx.fillRect(centerX - imageWidth / 2, centerY - imageHeight / 2, imageWidth / 2, imageHeight)
+        case "difference":
+          drawDifference(ctx)
           break
+        default:
+          drawSingle(ctx)
       }
     }
 
-    ctx.globalAlpha = 1
+    ctx.restore()
 
-    // Add mode and image count indicator
-    ctx.fillStyle = "#FFFFFF"
-    ctx.font = "16px monospace"
-    ctx.fillText(`Mode: ${mode}`, 20, 30)
-    ctx.fillText(`Images: ${imageList.length}/6`, 20, 55)
-    ctx.fillText(`Tool: ${selectedTool}`, 20, 80)
+    // Draw UI elements (not affected by zoom/pan)
+    drawUI(ctx)
+  }, [images, zoom, panOffset, comparisonMode, showGrid, canvasSize, opacity])
+
+  // Grid drawing
+  const drawGrid = (ctx: CanvasRenderingContext2D) => {
+    const gridSize = 20
+    ctx.strokeStyle = "#e0e0e0"
+    ctx.lineWidth = 1
+
+    for (let x = 0; x < canvasSize.width / zoom; x += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, canvasSize.height / zoom)
+      ctx.stroke()
+    }
+
+    for (let y = 0; y < canvasSize.height / zoom; y += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(canvasSize.width / zoom, y)
+      ctx.stroke()
+    }
   }
 
-  // Handle mouse events for panning
+  // Single image drawing
+  const drawSingle = (ctx: CanvasRenderingContext2D) => {
+    if (images.length === 0) return
+
+    const img = images[0]
+    if (img.element) {
+      const centerX = canvasSize.width / zoom / 2 - img.element.width / 2
+      const centerY = canvasSize.height / zoom / 2 - img.element.height / 2
+      ctx.drawImage(img.element, centerX, centerY)
+    }
+  }
+
+  // Side by side comparison
+  const drawSideBySide = (ctx: CanvasRenderingContext2D) => {
+    if (images.length < 2) return
+
+    const img1 = images[0]
+    const img2 = images[1]
+
+    if (img1.element && img2.element) {
+      const centerY = canvasSize.height / zoom / 2
+      const spacing = 50
+      const totalWidth = img1.element.width + img2.element.width + spacing
+      const startX = canvasSize.width / zoom / 2 - totalWidth / 2
+
+      ctx.drawImage(img1.element, startX, centerY - img1.element.height / 2)
+      ctx.drawImage(img2.element, startX + img1.element.width + spacing, centerY - img2.element.height / 2)
+    }
+  }
+
+  // Overlay comparison
+  const drawOverlay = (ctx: CanvasRenderingContext2D) => {
+    if (images.length < 2) return
+
+    const img1 = images[0]
+    const img2 = images[1]
+
+    if (img1.element && img2.element) {
+      const centerX = canvasSize.width / zoom / 2 - img1.element.width / 2
+      const centerY = canvasSize.height / zoom / 2 - img1.element.height / 2
+
+      ctx.drawImage(img1.element, centerX, centerY)
+
+      ctx.globalAlpha = opacity
+      ctx.drawImage(img2.element, centerX, centerY)
+      ctx.globalAlpha = 1
+    }
+  }
+
+  // Split comparison
+  const drawSplit = (ctx: CanvasRenderingContext2D) => {
+    if (images.length < 2) return
+
+    const img1 = images[0]
+    const img2 = images[1]
+
+    if (img1.element && img2.element) {
+      const centerX = canvasSize.width / zoom / 2 - img1.element.width / 2
+      const centerY = canvasSize.height / zoom / 2 - img1.element.height / 2
+      const splitX = centerX + img1.element.width / 2
+
+      // Draw left half of first image
+      ctx.drawImage(
+        img1.element,
+        0,
+        0,
+        img1.element.width / 2,
+        img1.element.height,
+        centerX,
+        centerY,
+        img1.element.width / 2,
+        img1.element.height,
+      )
+
+      // Draw right half of second image
+      ctx.drawImage(
+        img2.element,
+        img2.element.width / 2,
+        0,
+        img2.element.width / 2,
+        img2.element.height,
+        splitX,
+        centerY,
+        img2.element.width / 2,
+        img2.element.height,
+      )
+
+      // Draw split line
+      ctx.strokeStyle = "#ff0000"
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(splitX, centerY)
+      ctx.lineTo(splitX, centerY + img1.element.height)
+      ctx.stroke()
+    }
+  }
+
+  // Difference comparison
+  const drawDifference = (ctx: CanvasRenderingContext2D) => {
+    if (images.length < 2) return
+    // This would require pixel-level comparison - simplified for demo
+    drawOverlay(ctx)
+  }
+
+  // UI elements drawing
+  const drawUI = (ctx: CanvasRenderingContext2D) => {
+    // Draw zoom indicator
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)"
+    ctx.fillRect(10, 10, 100, 30)
+    ctx.fillStyle = "white"
+    ctx.font = "14px Arial"
+    ctx.fillText(`Zoom: ${Math.round(zoom * 100)}%`, 20, 30)
+
+    // Draw tool indicator
+    if (currentTool) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.7)"
+      ctx.fillRect(10, 50, 120, 30)
+      ctx.fillStyle = "white"
+      ctx.fillText(`Tool: ${currentTool}`, 20, 70)
+    }
+  }
+
+  // Mouse event handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (selectedTool === "move" || e.button === 1) {
-      // Middle mouse button or move tool
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    }
+
+    if (currentTool === "pan" || e.button === 1) {
+      // Middle mouse button or pan tool
       setIsPanning(true)
-      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+      setLastPanPoint(point)
+    } else if (currentTool === "draw") {
+      setIsDrawing(true)
+      setLastDrawPoint(point)
     }
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    }
+
     if (isPanning) {
+      const deltaX = point.x - lastPanPoint.x
+      const deltaY = point.y - lastPanPoint.y
+
       setPanOffset({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
+        x: panOffset.x + deltaX,
+        y: panOffset.y + deltaY,
       })
+
+      setLastPanPoint(point)
+    } else if (isDrawing && canvasRef.current) {
+      const ctx = canvasRef.current.getContext("2d")
+      if (ctx) {
+        ctx.strokeStyle = drawingColor
+        ctx.lineWidth = strokeWidth
+        ctx.lineCap = "round"
+        ctx.beginPath()
+        ctx.moveTo(lastDrawPoint.x, lastDrawPoint.y)
+        ctx.lineTo(point.x, point.y)
+        ctx.stroke()
+        setLastDrawPoint(point)
+      }
     }
   }
 
   const handleMouseUp = () => {
     setIsPanning(false)
+    setIsDrawing(false)
   }
 
-  // Handle wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
-    const delta = e.deltaY > 0 ? -25 : 25
-    const newZoom = Math.max(25, Math.min(400, zoom + delta))
-    updateUI({ zoom: newZoom })
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
+    const newZoom = Math.max(0.1, Math.min(5, zoom * zoomFactor))
+
+    // Zoom towards mouse position
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      const mouseX = e.clientX - rect.left
+      const mouseY = e.clientY - rect.top
+
+      setPanOffset({
+        x: panOffset.x - (mouseX - panOffset.x) * (newZoom / zoom - 1),
+        y: panOffset.y - (mouseY - panOffset.y) * (newZoom / zoom - 1),
+      })
+    }
+
+    useAppStore.getState().setZoom(newZoom)
   }
 
-  const hasImages = images.length > 0
+  // Render on state changes
+  useEffect(() => {
+    render()
+  }, [render])
 
   return (
-    <div
-      ref={containerRef}
-      className={cn("flex-1 relative overflow-hidden bg-[#0B1120]", className)}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      {!hasImages ? (
-        // Empty state
+    <div ref={containerRef} className="flex-1 relative overflow-hidden bg-gray-100">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 cursor-crosshair"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+        style={{
+          cursor: currentTool === "pan" ? "grab" : currentTool === "draw" ? "crosshair" : "default",
+        }}
+      />
+
+      {images.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="relative mb-6">
-              <div className="w-24 h-24 mx-auto bg-[#00E5FF]/10 rounded-full flex items-center justify-center">
-                <ImageIcon className="w-12 h-12 text-[#00E5FF]/50" />
-              </div>
-              <div className="absolute -top-2 -right-2 w-8 h-8 bg-[#00E5FF] rounded-full flex items-center justify-center">
-                <Upload className="w-4 h-4 text-black" />
-              </div>
-            </div>
-            <h2 className="text-xl font-medium text-gray-300 mb-2">Upload images to start comparing</h2>
-            <p className="text-gray-500 mb-4">Drag and drop up to 6 images or use the upload area in the sidebar</p>
-            <div className="text-sm text-gray-600">
-              <p>Supported formats: PNG, JPG, GIF, WebP, SVG</p>
-              <p>Maximum file size: 50MB per image</p>
-            </div>
+          <div className="text-center text-gray-500">
+            <div className="text-lg font-medium mb-2">No images loaded</div>
+            <div className="text-sm">Upload images to start comparing</div>
           </div>
-        </div>
-      ) : (
-        // Canvas with images
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{
-            imageRendering: "pixelated",
-            cursor: isPanning ? "grabbing" : selectedTool === "move" ? "grab" : "crosshair",
-          }}
-        />
-      )}
-
-      {/* Tool cursor indicator */}
-      <div className="absolute top-4 left-4 bg-[#0B1120]/80 backdrop-blur-sm rounded-lg px-3 py-2 text-sm text-[#00E5FF] border border-[#00E5FF]/20">
-        Tool: {selectedTool} | Zoom: {zoom}% | Images: {images.length}/6
-      </div>
-
-      {/* Grid indicator */}
-      {showGrid && (
-        <div className="absolute top-4 right-4 bg-[#0B1120]/80 backdrop-blur-sm rounded-lg px-3 py-2 text-sm text-[#00E5FF] border border-[#00E5FF]/20">
-          Grid: ON
         </div>
       )}
     </div>

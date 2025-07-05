@@ -1,409 +1,227 @@
 "use client"
-
-import type React from "react"
-import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, Upload, Images, Layers, Settings, Square, Circle, Pen, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { Slider } from "@/components/ui/slider"
+import { Badge } from "@/components/ui/badge"
+import {
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
+  Settings,
+  Layers,
+  Palette,
+  Move,
+  RotateCcw,
+  Download,
+  Share2,
+  History,
+} from "lucide-react"
 import { useAppStore } from "@/src/store/useAppStore"
-import { cn } from "@/lib/utils"
+import { ImageUploadZone } from "@/src/components/features/image-upload/image-upload-zone"
+import { ImageThumbnails } from "@/src/components/features/image-upload/image-thumbnails"
+import { ComparisonModeSelector } from "@/components/features/comparison-modes/comparison-mode-selector"
+import { DrawingToolbar } from "@/components/features/drawing-tools/drawing-toolbar"
 
-interface CollapsibleSidebarProps {
-  className?: string
-}
-
-export const CollapsibleSidebar: React.FC<CollapsibleSidebarProps> = ({ className }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [activeTab, setActiveTab] = useState("upload")
-
+export function CollapsibleSidebar() {
   const {
-    ui: { sidebarCollapsed, selectedTool, strokeWidth, strokeColor },
-    updateUI,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    images,
+    currentTool,
+    setCurrentTool,
     comparisonMode,
     setComparisonMode,
-    images,
-    addImage,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
   } = useAppStore()
 
-  // Sync with store state
-  useEffect(() => {
-    setIsCollapsed(sidebarCollapsed)
-  }, [sidebarCollapsed])
-
-  const handleToggleCollapse = () => {
-    const newCollapsed = !isCollapsed
-    setIsCollapsed(newCollapsed)
-    updateUI({ sidebarCollapsed: newCollapsed })
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed)
   }
 
-  const handleToolSelect = (tool: string) => {
-    updateUI({ selectedTool: tool })
-  }
-
-  const handleStrokeWidthChange = (value: number[]) => {
-    updateUI({ strokeWidth: value[0] })
-  }
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files) return
-
-    Array.from(files).forEach((file, index) => {
-      if (images.length + index < 6) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const img = new Image()
-          img.onload = () => {
-            addImage({
-              id: Date.now() + index + "",
-              name: file.name,
-              url: e.target?.result as string,
-              size: file.size,
-              width: img.width,
-              height: img.height,
-              type: file.type,
-            })
-          }
-          img.src = e.target?.result as string
-        }
-        reader.readAsDataURL(file)
-      }
-    })
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    const files = Array.from(e.dataTransfer.files)
-    files.forEach((file, index) => {
-      if (images.length + index < 6 && file.type.startsWith("image/")) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          const img = new Image()
-          img.onload = () => {
-            addImage({
-              id: Date.now() + index + "",
-              name: file.name,
-              url: e.target?.result as string,
-              size: file.size,
-              width: img.width,
-              height: img.height,
-              type: file.type,
-            })
-          }
-          img.src = e.target?.result as string
-        }
-        reader.readAsDataURL(file)
-      }
-    })
-  }
+  const tools = [
+    { id: "select", icon: Move, label: "Select", shortcut: "V" },
+    { id: "draw", icon: Palette, label: "Draw", shortcut: "B" },
+    { id: "measure", icon: Layers, label: "Measure", shortcut: "M" },
+  ]
 
   return (
     <div
-      className={cn(
-        "relative bg-[#0B1120]/95 backdrop-blur-sm border-r border-[#00E5FF]/15 transition-all duration-300 ease-in-out flex flex-col",
-        isCollapsed ? "w-16" : "w-80",
-        className,
-      )}
+      className={`
+      relative bg-white border-r border-gray-200 transition-all duration-300 ease-in-out
+      ${sidebarCollapsed ? "w-12" : "w-80"}
+      flex flex-col h-full
+    `}
     >
-      {/* Header with collapse button */}
-      <div className="flex items-center justify-between p-4 border-b border-[#00E5FF]/15">
-        {!isCollapsed && (
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-[#00E5FF] tracking-wide">ImageCompare Pro</h1>
-            <p className="text-xs text-gray-400 mt-1">Professional Image Analysis</p>
-          </div>
-        )}
+      {/* Collapse Button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={toggleSidebar}
+        className="absolute -right-3 top-4 z-10 h-6 w-6 rounded-full border bg-white shadow-md hover:bg-gray-50"
+      >
+        {sidebarCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+      </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleToggleCollapse}
-          className="text-gray-400 hover:text-[#00E5FF] p-2 h-8 w-8 shrink-0"
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-        </Button>
+      {/* Sidebar Content */}
+      <div className={`flex-1 overflow-hidden ${sidebarCollapsed ? "hidden" : "block"}`}>
+        <div className="p-4 space-y-4">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">ImageCompare Pro</h2>
+            <Badge variant="secondary" className="text-xs">
+              v2.0
+            </Badge>
+          </div>
+
+          <Separator />
+
+          {/* Main Tabs */}
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="upload" className="text-xs">
+                <ImageIcon className="h-3 w-3 mr-1" />
+                Upload
+              </TabsTrigger>
+              <TabsTrigger value="tools" className="text-xs">
+                <Settings className="h-3 w-3 mr-1" />
+                Tools
+              </TabsTrigger>
+              <TabsTrigger value="compare" className="text-xs">
+                <ImageIcon className="h-3 w-3 mr-1" />
+                Compare
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Upload Tab */}
+            <TabsContent value="upload" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Image Upload</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <ImageUploadZone />
+                  {images.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium text-gray-700">Uploaded Images ({images.length})</h4>
+                      <ImageThumbnails />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tools Tab */}
+            <TabsContent value="tools" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Drawing Tools</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DrawingToolbar />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Quick Tools</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {tools.map((tool) => (
+                    <Button
+                      key={tool.id}
+                      variant={currentTool === tool.id ? "default" : "ghost"}
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => setCurrentTool(tool.id as any)}
+                    >
+                      <tool.icon className="h-4 w-4 mr-2" />
+                      {tool.label}
+                      <Badge variant="outline" className="ml-auto text-xs">
+                        {tool.shortcut}
+                      </Badge>
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">History</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!canUndo}
+                      onClick={undo}
+                      className="flex-1 bg-transparent"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Undo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!canRedo}
+                      onClick={redo}
+                      className="flex-1 bg-transparent"
+                    >
+                      <History className="h-3 w-3 mr-1" />
+                      Redo
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Compare Tab */}
+            <TabsContent value="compare" className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Comparison Mode</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ComparisonModeSelector />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Export & Share</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button variant="outline" size="sm" className="w-full justify-start bg-transparent">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Results
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start bg-transparent">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Project
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
 
-      {/* Content */}
-      {isCollapsed ? (
-        // Collapsed state - icon-only navigation
-        <div className="flex flex-col items-center py-4 space-y-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsCollapsed(false)
-              updateUI({ sidebarCollapsed: false })
-              setActiveTab("upload")
-            }}
-            className="text-gray-400 hover:text-[#00E5FF] p-2 h-10 w-10 relative"
-            title="Upload Images"
-          >
-            <Upload className="w-5 h-5" />
-            {images.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#00E5FF] text-black text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {images.length}
-              </span>
-            )}
+      {/* Collapsed State - Icon Only */}
+      {sidebarCollapsed && (
+        <div className="flex flex-col items-center py-4 space-y-3">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSidebarCollapsed(false)}>
+            <ImageIcon className="h-4 w-4" />
           </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsCollapsed(false)
-              updateUI({ sidebarCollapsed: false })
-              setActiveTab("images")
-            }}
-            className="text-gray-400 hover:text-[#00E5FF] p-2 h-10 w-10"
-            title="Image Gallery"
-          >
-            <Images className="w-5 h-5" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <Settings className="h-4 w-4" />
           </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsCollapsed(false)
-              updateUI({ sidebarCollapsed: false })
-              setActiveTab("tools")
-            }}
-            className="text-gray-400 hover:text-[#00E5FF] p-2 h-10 w-10"
-            title="Drawing Tools"
-          >
-            <Layers className="w-5 h-5" />
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+            <ImageIcon className="h-4 w-4" />
           </Button>
-
-          <Separator className="w-8 bg-[#00E5FF]/15 my-2" />
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsCollapsed(false)
-              updateUI({ sidebarCollapsed: false })
-              setActiveTab("more")
-            }}
-            className="text-gray-400 hover:text-[#00E5FF] p-2 h-10 w-10"
-            title="More Options"
-          >
-            <Settings className="w-5 h-5" />
-          </Button>
-        </div>
-      ) : (
-        // Expanded state - full sidebar content
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Upload Section */}
-          <div className="p-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-medium text-[#00E5FF] mb-3">UPLOAD IMAGES ({images.length}/6)</h3>
-              <div
-                className="border-2 border-dashed border-[#00E5FF]/30 rounded-lg p-8 text-center hover:border-[#00E5FF]/50 transition-colors cursor-pointer"
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onClick={() => document.getElementById("file-upload")?.click()}
-              >
-                <Upload className="w-8 h-8 mx-auto mb-4 text-[#00E5FF]" />
-                <p className="text-sm text-gray-300 mb-2">Drag & drop images or click to browse</p>
-                <p className="text-xs text-gray-500">PNG, JPG, WebP up to 10MB each</p>
-                <input
-                  id="file-upload"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </div>
-            </div>
-
-            {/* Image Thumbnails */}
-            {images.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium text-gray-400">UPLOADED IMAGES</h4>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {images.map((image, index) => (
-                    <div key={image.id} className="flex items-center space-x-2 p-2 bg-[#00E5FF]/5 rounded">
-                      <div className="w-8 h-8 bg-[#00E5FF]/20 rounded flex items-center justify-center text-xs text-[#00E5FF]">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-300 truncate">{image.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {image.width}×{image.height}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <Separator className="bg-[#00E5FF]/15" />
-
-            {/* Comparison Mode */}
-            <div>
-              <h3 className="text-sm font-medium text-[#00E5FF] mb-3">COMPARISON MODE</h3>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={comparisonMode === "overlay" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setComparisonMode("overlay")}
-                  className={cn(
-                    "text-xs",
-                    comparisonMode === "overlay"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  Overlay
-                </Button>
-                <Button
-                  variant={comparisonMode === "split" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setComparisonMode("split")}
-                  className={cn(
-                    "text-xs",
-                    comparisonMode === "split"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  Split
-                </Button>
-                <Button
-                  variant={comparisonMode === "slider" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setComparisonMode("slider")}
-                  className={cn(
-                    "text-xs",
-                    comparisonMode === "slider"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  Slider
-                </Button>
-              </div>
-            </div>
-
-            <Separator className="bg-[#00E5FF]/15" />
-
-            {/* Drawing Tools */}
-            <div>
-              <h3 className="text-sm font-medium text-[#00E5FF] mb-3">DRAWING TOOLS</h3>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <Button
-                  variant={selectedTool === "rectangle" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleToolSelect("rectangle")}
-                  className={cn(
-                    "justify-start text-xs",
-                    selectedTool === "rectangle"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  <Square className="w-4 h-4 mr-2" />
-                  Rectangle
-                </Button>
-                <Button
-                  variant={selectedTool === "circle" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleToolSelect("circle")}
-                  className={cn(
-                    "justify-start text-xs",
-                    selectedTool === "circle"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  <Circle className="w-4 h-4 mr-2" />
-                  Circle
-                </Button>
-                <Button
-                  variant={selectedTool === "pen" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleToolSelect("pen")}
-                  className={cn(
-                    "justify-start text-xs",
-                    selectedTool === "pen"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  <Pen className="w-4 h-4 mr-2" />
-                  Pen
-                </Button>
-                <Button
-                  variant={selectedTool === "text" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleToolSelect("text")}
-                  className={cn(
-                    "justify-start text-xs",
-                    selectedTool === "text"
-                      ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                      : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent",
-                  )}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Text
-                </Button>
-              </div>
-
-              {/* Stroke Width */}
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-2 block">STROKE WIDTH</label>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs text-gray-500 w-6">1px</span>
-                    <Slider
-                      value={[strokeWidth]}
-                      onValueChange={handleStrokeWidthChange}
-                      max={10}
-                      min={1}
-                      step={1}
-                      className="flex-1"
-                    />
-                    <span className="text-xs text-gray-500 w-8">10px</span>
-                  </div>
-                  <div className="text-center mt-1">
-                    <span className="text-xs text-[#00E5FF]">{strokeWidth}px</span>
-                  </div>
-                </div>
-
-                {/* Color */}
-                <div>
-                  <label className="text-xs text-gray-400 mb-2 block">COLOR</label>
-                  <div
-                    className="w-8 h-8 rounded border-2 border-gray-600 cursor-pointer"
-                    style={{ backgroundColor: strokeColor }}
-                    onClick={() => {
-                      // Color picker would open here
-                      console.log("Open color picker")
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
-      {!isCollapsed && (
-        <div className="p-4 border-t border-[#00E5FF]/15">
-          <div className="text-xs text-gray-500 text-center">v2.0.0 • Professional Edition</div>
         </div>
       )}
     </div>

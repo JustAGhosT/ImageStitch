@@ -1,402 +1,275 @@
 "use client"
 
-import type React from "react"
-import { useState, useRef, useCallback, useEffect } from "react"
+import React, { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
-  Move,
-  Ruler,
-  Palette,
-  Eye,
-  Layers,
+  GripVertical,
   RotateCw,
+  RotateCcw,
   FlipHorizontal,
   FlipVertical,
   Crop,
-  GripVertical,
+  Contrast,
+  FlashlightIcon as Brightness4,
+  Palette,
+  Move3D,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { useAppStore } from "@/src/store/useAppStore"
-import { cn } from "@/lib/utils"
 
-type DockPosition = "floating" | "top" | "bottom" | "left" | "right"
-
-interface DockableToolbarProps {
-  className?: string
+interface DockingZone {
+  id: string
+  label: string
+  position: { x: number; y: number; width: number; height: number }
 }
 
-export const DockableToolbar: React.FC<DockableToolbarProps> = ({ className }) => {
-  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 120, y: 120 })
-  const [dockPosition, setDockPosition] = useState<DockPosition>("floating")
+export function DockableToolbar() {
   const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [showDockZones, setShowDockZones] = useState(false)
-
+  const [position, setPosition] = useState({ x: 100, y: 100 })
+  const [isDocked, setIsDocked] = useState(false)
+  const [dockedPosition, setDockedPosition] = useState<string | null>(null)
+  const [showDockingZones, setShowDockingZones] = useState(false)
   const toolbarRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const dragOffset = useRef({ x: 0, y: 0 })
 
-  const {
-    ui: { selectedTool },
-    updateUI,
-    images,
-  } = useAppStore()
+  const { currentTool, setCurrentTool, images } = useAppStore()
 
-  // Handle drag start
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (dockPosition !== "floating") return
-
-      const rect = toolbarRef.current?.getBoundingClientRect()
-      if (!rect) return
-
-      setIsDragging(true)
-      setShowDockZones(true)
-      setDragOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      })
-      e.preventDefault()
-      e.stopPropagation()
+  const dockingZones: DockingZone[] = [
+    { id: "top", label: "Top", position: { x: 0, y: 0, width: window.innerWidth || 1200, height: 60 } },
+    {
+      id: "bottom",
+      label: "Bottom",
+      position: { x: 0, y: (window.innerHeight || 800) - 60, width: window.innerWidth || 1200, height: 60 },
     },
-    [dockPosition],
-  )
+    { id: "left", label: "Left", position: { x: 0, y: 60, width: 60, height: (window.innerHeight || 800) - 120 } },
+    {
+      id: "right",
+      label: "Right",
+      position: { x: (window.innerWidth || 1200) - 60, y: 60, width: 60, height: (window.innerHeight || 800) - 120 },
+    },
+  ]
 
-  // Handle drag move
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || dockPosition !== "floating") return
+  const tools = [
+    { id: "rotate-cw", icon: RotateCw, label: "Rotate Right", shortcut: "R" },
+    { id: "rotate-ccw", icon: RotateCcw, label: "Rotate Left", shortcut: "Shift+R" },
+    { id: "flip-h", icon: FlipHorizontal, label: "Flip Horizontal", shortcut: "H" },
+    { id: "flip-v", icon: FlipVertical, label: "Flip Vertical", shortcut: "V" },
+    { id: "crop", icon: Crop, label: "Crop", shortcut: "C" },
+    { id: "contrast", icon: Contrast, label: "Contrast", shortcut: "Ctrl+T" },
+    { id: "brightness", icon: Brightness4, label: "Brightness", shortcut: "Ctrl+B" },
+    { id: "color", icon: Palette, label: "Color Adjust", shortcut: "Ctrl+U" },
+  ]
 
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (!containerRect) return
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!toolbarRef.current) return
 
-      const newX = e.clientX - containerRect.left - dragOffset.x
-      const newY = e.clientY - containerRect.top - dragOffset.y
+    const rect = toolbarRef.current.getBoundingClientRect()
+    dragOffset.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    }
 
-      // Constrain to container bounds
-      const toolbarRect = toolbarRef.current?.getBoundingClientRect()
-      if (!toolbarRect) return
+    setIsDragging(true)
+    setShowDockingZones(true)
 
-      const maxX = containerRect.width - toolbarRect.width
-      const maxY = containerRect.height - toolbarRect.height
+    if (isDocked) {
+      setIsDocked(false)
+      setDockedPosition(null)
+    }
+  }
 
-      setPosition({
-        x: Math.max(0, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY)),
-      })
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return
 
-      // Check for docking zones
-      const threshold = 60
-      const centerX = e.clientX - containerRect.left
-      const centerY = e.clientY - containerRect.top
+    const newPosition = {
+      x: e.clientX - dragOffset.current.x,
+      y: e.clientY - dragOffset.current.y,
+    }
 
+    setPosition(newPosition)
+
+    // Check for docking zones
+    const centerX = newPosition.x + 150 // Half toolbar width
+    const centerY = newPosition.y + 25 // Half toolbar height
+
+    for (const zone of dockingZones) {
       if (
-        centerX < threshold ||
-        centerX > containerRect.width - threshold ||
-        centerY < threshold ||
-        centerY > containerRect.height - threshold
+        centerX >= zone.position.x &&
+        centerX <= zone.position.x + zone.position.width &&
+        centerY >= zone.position.y &&
+        centerY <= zone.position.y + zone.position.height
       ) {
-        setShowDockZones(true)
+        // Snap to docking zone
+        switch (zone.id) {
+          case "top":
+            setPosition({ x: Math.max(0, Math.min(window.innerWidth - 300, newPosition.x)), y: 10 })
+            break
+          case "bottom":
+            setPosition({
+              x: Math.max(0, Math.min(window.innerWidth - 300, newPosition.x)),
+              y: window.innerHeight - 60,
+            })
+            break
+          case "left":
+            setPosition({ x: 10, y: Math.max(60, Math.min(window.innerHeight - 110, newPosition.y)) })
+            break
+          case "right":
+            setPosition({
+              x: window.innerWidth - 310,
+              y: Math.max(60, Math.min(window.innerHeight - 110, newPosition.y)),
+            })
+            break
+        }
+        break
       }
-    },
-    [isDragging, dragOffset, dockPosition],
-  )
+    }
+  }
 
-  // Handle drag end
-  const handleMouseUp = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging) return
+  const handleMouseUp = (e: MouseEvent) => {
+    if (!isDragging) return
 
-      setIsDragging(false)
-      setShowDockZones(false)
+    setIsDragging(false)
+    setShowDockingZones(false)
 
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (!containerRect) return
+    // Check if dropped in docking zone
+    const centerX = position.x + 150
+    const centerY = position.y + 25
 
-      const threshold = 60
-      const centerX = e.clientX - containerRect.left
-      const centerY = e.clientY - containerRect.top
-
-      // Check for docking
-      if (centerX < threshold) {
-        setDockPosition("left")
-      } else if (centerX > containerRect.width - threshold) {
-        setDockPosition("right")
-      } else if (centerY < threshold) {
-        setDockPosition("top")
-      } else if (centerY > containerRect.height - threshold) {
-        setDockPosition("bottom")
+    for (const zone of dockingZones) {
+      if (
+        centerX >= zone.position.x &&
+        centerX <= zone.position.x + zone.position.width &&
+        centerY >= zone.position.y &&
+        centerY <= zone.position.y + zone.position.height
+      ) {
+        setIsDocked(true)
+        setDockedPosition(zone.id)
+        break
       }
-    },
-    [isDragging],
-  )
+    }
+  }
 
-  // Add event listeners
   useEffect(() => {
     if (isDragging) {
       document.addEventListener("mousemove", handleMouseMove)
       document.addEventListener("mouseup", handleMouseUp)
+
       return () => {
         document.removeEventListener("mousemove", handleMouseMove)
         document.removeEventListener("mouseup", handleMouseUp)
       }
     }
-  }, [isDragging, handleMouseMove, handleMouseUp])
+  }, [isDragging, position])
 
-  // Undock toolbar
-  const handleUndock = useCallback(() => {
-    setDockPosition("floating")
-    setPosition({ x: 120, y: 120 })
-  }, [])
+  const getToolbarStyle = () => {
+    const baseStyle = {
+      position: "fixed" as const,
+      zIndex: 1000,
+      transition: isDragging ? "none" : "all 0.2s ease-in-out",
+    }
 
-  const getToolbarStyle = (): React.CSSProperties => {
-    switch (dockPosition) {
-      case "top":
-        return {
-          position: "absolute",
-          top: 8,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 50,
-        }
-      case "bottom":
-        return {
-          position: "absolute",
-          bottom: 8,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 50,
-        }
-      case "left":
-        return {
-          position: "absolute",
-          left: 8,
-          top: "50%",
-          transform: "translateY(-50%)",
-          zIndex: 50,
-        }
-      case "right":
-        return {
-          position: "absolute",
-          right: 8,
-          top: "50%",
-          transform: "translateY(-50%)",
-          zIndex: 50,
-        }
-      default:
-        return {
-          position: "absolute",
-          left: position.x,
-          top: position.y,
-          zIndex: 50,
-        }
+    if (isDocked && dockedPosition) {
+      switch (dockedPosition) {
+        case "top":
+          return { ...baseStyle, top: 10, left: position.x, flexDirection: "row" as const }
+        case "bottom":
+          return { ...baseStyle, bottom: 10, left: position.x, flexDirection: "row" as const }
+        case "left":
+          return { ...baseStyle, left: 10, top: position.y, flexDirection: "column" as const }
+        case "right":
+          return { ...baseStyle, right: 10, top: position.y, flexDirection: "column" as const }
+      }
+    }
+
+    return {
+      ...baseStyle,
+      left: position.x,
+      top: position.y,
+      flexDirection: "row" as const,
     }
   }
 
-  const isVertical = dockPosition === "left" || dockPosition === "right"
-
-  // Only show toolbar if there are images
   if (images.length === 0) {
-    return null
+    return null // Don't show toolbar if no images loaded
   }
 
   return (
-    <TooltipProvider>
-      <div ref={containerRef} className="absolute inset-0 pointer-events-none">
-        {/* Docking zones */}
-        {showDockZones && dockPosition === "floating" && (
-          <>
-            <div className="absolute top-0 left-0 right-0 h-16 bg-[#00E5FF]/10 border-2 border-dashed border-[#00E5FF]/50 flex items-center justify-center text-[#00E5FF] text-sm font-medium pointer-events-none z-40">
-              Drop to dock to top
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-[#00E5FF]/10 border-2 border-dashed border-[#00E5FF]/50 flex items-center justify-center text-[#00E5FF] text-sm font-medium pointer-events-none z-40">
-              Drop to dock to bottom
-            </div>
-            <div className="absolute top-0 bottom-0 left-0 w-16 bg-[#00E5FF]/10 border-2 border-dashed border-[#00E5FF]/50 flex items-center justify-center text-[#00E5FF] text-sm font-medium pointer-events-none z-40">
-              <span className="transform -rotate-90 whitespace-nowrap">Drop to dock to left</span>
-            </div>
-            <div className="absolute top-0 bottom-0 right-0 w-16 bg-[#00E5FF]/10 border-2 border-dashed border-[#00E5FF]/50 flex items-center justify-center text-[#00E5FF] text-sm font-medium pointer-events-none z-40">
-              <span className="transform rotate-90 whitespace-nowrap">Drop to dock to right</span>
-            </div>
-          </>
-        )}
-
-        {/* Toolbar */}
-        <div
-          ref={toolbarRef}
-          style={getToolbarStyle()}
-          className={cn(
-            "flex items-center gap-1 bg-[#0B1120]/95 backdrop-blur-sm border border-[#00E5FF]/30 rounded-lg p-2 shadow-lg shadow-[#00E5FF]/20 pointer-events-auto",
-            isDragging && "shadow-2xl shadow-[#00E5FF]/30 scale-105",
-            isVertical && "flex-col",
-            className,
-          )}
-        >
-          {/* Drag handle */}
-          {dockPosition === "floating" && (
+    <>
+      {/* Docking Zones */}
+      {showDockingZones && (
+        <div className="fixed inset-0 pointer-events-none z-999">
+          {dockingZones.map((zone) => (
             <div
-              className="cursor-move p-1 text-gray-400 hover:text-[#00E5FF] transition-colors select-none"
-              onMouseDown={handleMouseDown}
-              title="Drag to move toolbar"
+              key={zone.id}
+              className="absolute bg-blue-500 bg-opacity-20 border-2 border-blue-500 border-dashed rounded-lg flex items-center justify-center"
+              style={{
+                left: zone.position.x,
+                top: zone.position.y,
+                width: zone.position.width,
+                height: zone.position.height,
+              }}
             >
-              <GripVertical className="w-4 h-4" />
+              <Badge variant="secondary" className="text-xs">
+                Drop to dock {zone.label}
+              </Badge>
             </div>
-          )}
-
-          {/* Undock button for docked toolbars */}
-          {dockPosition !== "floating" && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleUndock}
-                  className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8"
-                >
-                  <Move className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Undock toolbar</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-
-          {!isVertical && <Separator orientation="vertical" className="h-6 bg-[#00E5FF]/15" />}
-          {isVertical && <Separator orientation="horizontal" className="w-6 bg-[#00E5FF]/15" />}
-
-          {/* Image transformation tools */}
-          <div className={cn("flex gap-1", isVertical && "flex-col")}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8">
-                  <RotateCw className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Rotate Clockwise</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8">
-                  <FlipHorizontal className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Flip Horizontal</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8">
-                  <FlipVertical className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Flip Vertical</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          {!isVertical && <Separator orientation="vertical" className="h-6 bg-[#00E5FF]/15" />}
-          {isVertical && <Separator orientation="horizontal" className="w-6 bg-[#00E5FF]/15" />}
-
-          {/* Analysis tools */}
-          <div className={cn("flex gap-1", isVertical && "flex-col")}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateUI({ selectedTool: "measurement" })}
-                  className={cn(
-                    "p-1 h-8 w-8 transition-colors",
-                    selectedTool === "measurement"
-                      ? "text-[#00E5FF] bg-[#00E5FF]/20"
-                      : "text-gray-400 hover:text-[#00E5FF]",
-                  )}
-                >
-                  <Ruler className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Measurement Tool (M)</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateUI({ selectedTool: "colorPicker" })}
-                  className={cn(
-                    "p-1 h-8 w-8 transition-colors",
-                    selectedTool === "colorPicker"
-                      ? "text-[#00E5FF] bg-[#00E5FF]/20"
-                      : "text-gray-400 hover:text-[#00E5FF]",
-                  )}
-                >
-                  <Palette className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Color Picker (I)</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => updateUI({ selectedTool: "crop" })}
-                  className={cn(
-                    "p-1 h-8 w-8 transition-colors",
-                    selectedTool === "crop" ? "text-[#00E5FF] bg-[#00E5FF]/20" : "text-gray-400 hover:text-[#00E5FF]",
-                  )}
-                >
-                  <Crop className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Crop Tool (C)</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-
-          {!isVertical && <Separator orientation="vertical" className="h-6 bg-[#00E5FF]/15" />}
-          {isVertical && <Separator orientation="horizontal" className="w-6 bg-[#00E5FF]/15" />}
-
-          {/* View tools */}
-          <div className={cn("flex gap-1", isVertical && "flex-col")}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8">
-                  <Eye className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Toggle Layer Visibility</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-[#00E5FF] p-1 h-8 w-8">
-                  <Layers className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Layer Controls</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          ))}
         </div>
-      </div>
-    </TooltipProvider>
+      )}
+
+      {/* Dockable Toolbar */}
+      <Card
+        ref={toolbarRef}
+        className={`
+          flex items-center gap-1 p-2 shadow-lg cursor-move
+          ${isDragging ? "shadow-2xl scale-105" : ""}
+          ${isDocked ? "bg-blue-50 border-blue-200" : "bg-white"}
+        `}
+        style={getToolbarStyle()}
+        onMouseDown={handleMouseDown}
+      >
+        {/* Drag Handle */}
+        <div className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600">
+          <GripVertical className="h-4 w-4" />
+        </div>
+
+        {/* Tools */}
+        {tools.map((tool, index) => (
+          <React.Fragment key={tool.id}>
+            {index === 4 && <div className="w-px h-6 bg-gray-200 mx-1" />}
+            <Button
+              variant={currentTool === tool.id ? "default" : "ghost"}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={(e) => {
+                e.stopPropagation()
+                setCurrentTool(tool.id as any)
+              }}
+              title={`${tool.label} (${tool.shortcut})`}
+            >
+              <tool.icon className="h-4 w-4" />
+            </Button>
+          </React.Fragment>
+        ))}
+
+        {/* Undock Button */}
+        {isDocked && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 ml-2"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsDocked(false)
+              setDockedPosition(null)
+            }}
+            title="Undock toolbar"
+          >
+            <Move3D className="h-4 w-4" />
+          </Button>
+        )}
+      </Card>
+    </>
   )
 }

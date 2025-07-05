@@ -4,10 +4,14 @@ import { MainToolbar } from "@/components/layout/main-toolbar"
 import { DockableToolbar } from "@/components/features/dockable-toolbar/dockable-toolbar"
 import { CanvasRenderer } from "@/components/features/canvas/canvas-renderer"
 import { StatusBar } from "@/components/layout/status-bar"
+import { useKeyboardShortcuts } from "@/src/hooks/useKeyboardShortcuts"
 
-export default function ImageCompareProPage() {
+export default function ImageComparePage() {
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts()
+
   return (
-    <div className="h-screen flex flex-col bg-[#0B1120] text-white overflow-hidden">
+    <div className="h-screen flex flex-col bg-gray-50">
       {/* Main Toolbar */}
       <MainToolbar />
 
@@ -19,6 +23,8 @@ export default function ImageCompareProPage() {
         {/* Canvas Area */}
         <div className="flex-1 relative">
           <CanvasRenderer />
+
+          {/* Dockable Toolbar */}
           <DockableToolbar />
         </div>
       </div>

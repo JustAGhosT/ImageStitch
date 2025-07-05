@@ -1,198 +1,212 @@
-"use client"
-
 import { create } from "zustand"
-import { devtools, subscribeWithSelector } from "zustand/middleware"
-import { immer } from "zustand/middleware/immer"
+import { devtools, persist } from "zustand/middleware"
 
-// Types
 export interface ImageData {
   id: string
   name: string
   url: string
-  size: number
+  element?: HTMLImageElement
   width: number
   height: number
-  type: string
-  thumbnail?: string
-}
-
-export interface UIState {
-  zoom: number
-  showGrid: boolean
-  selectedTool: string
-  strokeWidth: number
-  strokeColor: string
-  sidebarCollapsed: boolean
-  panX: number
-  panY: number
+  size: number
 }
 
 export interface HistoryState {
-  past: any[]
-  present: any
-  future: any[]
+  images: ImageData[]
+  zoom: number
+  panOffset: { x: number; y: number }
+  currentTool: string
+  comparisonMode: string
 }
 
 export interface AppState {
+  // UI State
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+
   // Images
   images: ImageData[]
-  selectedImageIds: string[]
-
-  // Comparison
-  comparisonMode: "overlay" | "split" | "slider"
-
-  // UI State
-  ui: UIState
-
-  // History
-  history: HistoryState
-
-  // Actions
   addImage: (image: ImageData) => void
   removeImage: (id: string) => void
   clearImages: () => void
-  selectImage: (id: string) => void
-  deselectImage: (id: string) => void
-  setComparisonMode: (mode: "overlay" | "split" | "slider") => void
-  updateUI: (updates: Partial<UIState>) => void
+
+  // Canvas State
+  zoom: number
+  setZoom: (zoom: number) => void
+  panOffset: { x: number; y: number }
+  setPanOffset: (offset: { x: number; y: number }) => void
+
+  // Tools
+  currentTool:
+    | "select"
+    | "draw"
+    | "measure"
+    | "pan"
+    | "rotate-cw"
+    | "rotate-ccw"
+    | "flip-h"
+    | "flip-v"
+    | "crop"
+    | "contrast"
+    | "brightness"
+    | "color"
+  setCurrentTool: (tool: AppState["currentTool"]) => void
+
+  // Comparison
+  comparisonMode: "single" | "side-by-side" | "overlay" | "split" | "difference"
+  setComparisonMode: (mode: AppState["comparisonMode"]) => void
+
+  // Drawing
+  drawingColor: string
+  setDrawingColor: (color: string) => void
+  strokeWidth: number
+  setStrokeWidth: (width: number) => void
+  opacity: number
+  setOpacity: (opacity: number) => void
+
+  // View
+  viewMode: "single" | "split"
+  setViewMode: (mode: "single" | "split") => void
+  showGrid: boolean
+  setShowGrid: (show: boolean) => void
+
+  // History
+  history: HistoryState[]
+  historyIndex: number
+  canUndo: boolean
+  canRedo: boolean
   undo: () => void
   redo: () => void
   saveToHistory: () => void
 }
 
-const initialUIState: UIState = {
-  zoom: 100,
-  showGrid: false,
-  selectedTool: "move",
-  strokeWidth: 2,
-  strokeColor: "#00E5FF",
-  sidebarCollapsed: false,
-  panX: 0,
-  panY: 0,
-}
-
-const initialHistoryState: HistoryState = {
-  past: [],
-  present: null,
-  future: [],
-}
-
 export const useAppStore = create<AppState>()(
   devtools(
-    subscribeWithSelector(
-      immer((set, get) => ({
-        // Initial state
+    persist(
+      (set, get) => ({
+        // UI State
+        sidebarCollapsed: false,
+        setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+        // Images
         images: [],
-        selectedImageIds: [],
-        comparisonMode: "overlay",
-        ui: initialUIState,
-        history: initialHistoryState,
-
-        // Actions
-        addImage: (image: ImageData) => {
-          set((state) => {
-            if (state.images.length < 6) {
-              state.images.push(image)
-            }
-          })
+        addImage: (image) => {
+          set((state) => ({
+            images: [...state.images, image],
+          }))
+          get().saveToHistory()
         },
-
-        removeImage: (id: string) => {
-          set((state) => {
-            state.images = state.images.filter((img) => img.id !== id)
-            state.selectedImageIds = state.selectedImageIds.filter((imgId) => imgId !== id)
-          })
+        removeImage: (id) => {
+          set((state) => ({
+            images: state.images.filter((img) => img.id !== id),
+          }))
+          get().saveToHistory()
         },
-
         clearImages: () => {
-          set((state) => {
-            state.images = []
-            state.selectedImageIds = []
-          })
+          set({ images: [] })
+          get().saveToHistory()
         },
 
-        selectImage: (id: string) => {
-          set((state) => {
-            if (!state.selectedImageIds.includes(id)) {
-              state.selectedImageIds.push(id)
-            }
-          })
-        },
+        // Canvas State
+        zoom: 1,
+        setZoom: (zoom) => set({ zoom }),
+        panOffset: { x: 0, y: 0 },
+        setPanOffset: (offset) => set({ panOffset: offset }),
 
-        deselectImage: (id: string) => {
-          set((state) => {
-            state.selectedImageIds = state.selectedImageIds.filter((imgId) => imgId !== id)
-          })
-        },
+        // Tools
+        currentTool: "select",
+        setCurrentTool: (tool) => set({ currentTool: tool }),
 
-        setComparisonMode: (mode: "overlay" | "split" | "slider") => {
-          set((state) => {
-            state.comparisonMode = mode
-          })
-        },
+        // Comparison
+        comparisonMode: "single",
+        setComparisonMode: (mode) => set({ comparisonMode: mode }),
 
-        updateUI: (updates: Partial<UIState>) => {
-          set((state) => {
-            Object.assign(state.ui, updates)
-          })
-        },
+        // Drawing
+        drawingColor: "#ff0000",
+        setDrawingColor: (color) => set({ drawingColor: color }),
+        strokeWidth: 2,
+        setStrokeWidth: (width) => set({ strokeWidth: width }),
+        opacity: 0.5,
+        setOpacity: (opacity) => set({ opacity }),
+
+        // View
+        viewMode: "single",
+        setViewMode: (mode) => set({ viewMode: mode }),
+        showGrid: false,
+        setShowGrid: (show) => set({ showGrid: show }),
+
+        // History
+        history: [],
+        historyIndex: -1,
+        canUndo: false,
+        canRedo: false,
 
         saveToHistory: () => {
-          set((state) => {
-            const currentState = {
-              images: state.images,
-              selectedImageIds: state.selectedImageIds,
-              comparisonMode: state.comparisonMode,
-              ui: state.ui,
-            }
+          const state = get()
+          const currentState: HistoryState = {
+            images: state.images,
+            zoom: state.zoom,
+            panOffset: state.panOffset,
+            currentTool: state.currentTool,
+            comparisonMode: state.comparisonMode,
+          }
 
-            state.history.past.push(state.history.present)
-            state.history.present = currentState
-            state.history.future = []
+          const newHistory = state.history.slice(0, state.historyIndex + 1)
+          newHistory.push(currentState)
 
-            // Limit history size
-            if (state.history.past.length > 50) {
-              state.history.past = state.history.past.slice(-50)
-            }
+          // Limit history to 50 entries
+          if (newHistory.length > 50) {
+            newHistory.shift()
+          }
+
+          set({
+            history: newHistory,
+            historyIndex: newHistory.length - 1,
+            canUndo: newHistory.length > 1,
+            canRedo: false,
           })
         },
 
         undo: () => {
-          set((state) => {
-            if (state.history.past.length > 0) {
-              const previous = state.history.past.pop()
-              state.history.future.unshift(state.history.present)
-              state.history.present = previous
+          const state = get()
+          if (state.canUndo && state.historyIndex > 0) {
+            const newIndex = state.historyIndex - 1
+            const historyState = state.history[newIndex]
 
-              // Restore state
-              if (previous) {
-                state.images = previous.images
-                state.selectedImageIds = previous.selectedImageIds
-                state.comparisonMode = previous.comparisonMode
-                state.ui = previous.ui
-              }
-            }
-          })
+            set({
+              ...historyState,
+              historyIndex: newIndex,
+              canUndo: newIndex > 0,
+              canRedo: true,
+            })
+          }
         },
 
         redo: () => {
-          set((state) => {
-            if (state.history.future.length > 0) {
-              const next = state.history.future.shift()
-              state.history.past.push(state.history.present)
-              state.history.present = next
+          const state = get()
+          if (state.canRedo && state.historyIndex < state.history.length - 1) {
+            const newIndex = state.historyIndex + 1
+            const historyState = state.history[newIndex]
 
-              // Restore state
-              if (next) {
-                state.images = next.images
-                state.selectedImageIds = next.selectedImageIds
-                state.comparisonMode = next.comparisonMode
-                state.ui = next.ui
-              }
-            }
-          })
+            set({
+              ...historyState,
+              historyIndex: newIndex,
+              canUndo: true,
+              canRedo: newIndex < state.history.length - 1,
+            })
+          }
         },
-      })),
+      }),
+      {
+        name: "image-compare-store",
+        partialize: (state) => ({
+          sidebarCollapsed: state.sidebarCollapsed,
+          drawingColor: state.drawingColor,
+          strokeWidth: state.strokeWidth,
+          opacity: state.opacity,
+          showGrid: state.showGrid,
+        }),
+      },
     ),
     {
       name: "image-compare-store",

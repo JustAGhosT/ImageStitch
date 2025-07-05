@@ -1,134 +1,133 @@
 "use client"
-
-import type React from "react"
-import { Square, Circle, Pen, Type, Move, Ruler, Palette } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Brush, Eraser, Type, Circle, Square, ArrowRight, Palette, Minus } from "lucide-react"
 import { useAppStore } from "@/src/store/useAppStore"
-import { cn } from "@/lib/utils"
 
-interface DrawingToolbarProps {
-  className?: string
-}
+const drawingTools = [
+  { id: "brush", icon: Brush, label: "Brush", shortcut: "B" },
+  { id: "eraser", icon: Eraser, label: "Eraser", shortcut: "E" },
+  { id: "line", icon: Minus, label: "Line", shortcut: "L" },
+  { id: "circle", icon: Circle, label: "Circle", shortcut: "O" },
+  { id: "rectangle", icon: Square, label: "Rectangle", shortcut: "R" },
+  { id: "arrow", icon: ArrowRight, label: "Arrow", shortcut: "A" },
+  { id: "text", icon: Type, label: "Text", shortcut: "T" },
+]
 
-export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({ className }) => {
+const colorPalette = [
+  "#ff0000",
+  "#00ff00",
+  "#0000ff",
+  "#ffff00",
+  "#ff00ff",
+  "#00ffff",
+  "#000000",
+  "#ffffff",
+  "#808080",
+  "#800000",
+  "#008000",
+  "#000080",
+  "#808000",
+  "#800080",
+  "#008080",
+  "#c0c0c0",
+  "#ff8000",
+  "#8000ff",
+]
+
+export function DrawingToolbar() {
   const {
-    ui: { selectedTool, strokeWidth, strokeColor },
-    updateUI,
+    currentTool,
+    setCurrentTool,
+    drawingColor,
+    setDrawingColor,
+    strokeWidth,
+    setStrokeWidth,
+    opacity,
+    setOpacity,
   } = useAppStore()
 
-  const tools = [
-    { id: "move", name: "Move", icon: Move, shortcut: "V" },
-    { id: "rectangle", name: "Rectangle", icon: Square, shortcut: "R" },
-    { id: "circle", name: "Circle", icon: Circle, shortcut: "C" },
-    { id: "pen", name: "Pen", icon: Pen, shortcut: "P" },
-    { id: "text", name: "Text", icon: Type, shortcut: "T" },
-    { id: "measurement", name: "Measure", icon: Ruler, shortcut: "M" },
-    { id: "colorPicker", name: "Color Picker", icon: Palette, shortcut: "I" },
-  ]
-
-  const colors = [
-    "#00E5FF", // Cyan
-    "#FF4DA3", // Pink
-    "#4AFF4A", // Green
-    "#FFD700", // Gold
-    "#FF6B35", // Orange
-    "#8A2BE2", // Blue Violet
-    "#FF1744", // Red
-    "#FFFFFF", // White
-  ]
-
-  const handleToolSelect = (toolId: string) => {
-    updateUI({ selectedTool: toolId })
-  }
-
-  const handleStrokeWidthChange = (value: number[]) => {
-    updateUI({ strokeWidth: value[0] })
-  }
-
-  const handleColorSelect = (color: string) => {
-    updateUI({ strokeColor: color })
-  }
-
   return (
-    <Card className={cn("bg-[#0B1120]/50 border-[#00E5FF]/20", className)}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm text-[#00E5FF]">Drawing Tools</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Tool Selection */}
-        <div className="grid grid-cols-2 gap-2">
-          {tools.map((tool) => (
-            <Button
-              key={tool.id}
-              variant={selectedTool === tool.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleToolSelect(tool.id)}
-              className={cn(
-                "justify-start text-xs h-auto p-2",
-                selectedTool === tool.id
-                  ? "bg-[#00E5FF]/20 border-[#00E5FF] text-[#00E5FF]"
-                  : "border-[#00E5FF]/40 text-gray-300 hover:text-[#00E5FF] bg-transparent hover:bg-[#00E5FF]/10",
-              )}
-            >
-              <tool.icon className="w-4 h-4 mr-2" />
-              <div className="flex-1 text-left">
-                <div>{tool.name}</div>
-                <div className="text-xs opacity-50 font-mono">{tool.shortcut}</div>
-              </div>
-            </Button>
+    <div className="space-y-4">
+      {/* Drawing Tools */}
+      <div className="grid grid-cols-2 gap-2">
+        {drawingTools.map((tool) => (
+          <Button
+            key={tool.id}
+            variant={currentTool === tool.id ? "default" : "outline"}
+            size="sm"
+            className="justify-start"
+            onClick={() => setCurrentTool(tool.id as any)}
+          >
+            <tool.icon className="h-4 w-4 mr-2" />
+            <span className="text-xs">{tool.label}</span>
+            <Badge variant="secondary" className="ml-auto text-xs">
+              {tool.shortcut}
+            </Badge>
+          </Button>
+        ))}
+      </div>
+
+      <Separator />
+
+      {/* Color Palette */}
+      <div>
+        <div className="text-xs font-medium mb-2 flex items-center">
+          <Palette className="h-3 w-3 mr-1" />
+          Color
+        </div>
+        <div className="grid grid-cols-6 gap-1">
+          {colorPalette.map((color) => (
+            <button
+              key={color}
+              className={`w-6 h-6 rounded border-2 ${drawingColor === color ? "border-gray-800" : "border-gray-300"}`}
+              style={{ backgroundColor: color }}
+              onClick={() => setDrawingColor(color)}
+              title={color}
+            />
           ))}
         </div>
-
-        <Separator className="bg-[#00E5FF]/15" />
-
-        {/* Stroke Width */}
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-400 mb-2 block">STROKE WIDTH</label>
-            <div className="flex items-center space-x-3">
-              <span className="text-xs text-gray-500 w-6">1px</span>
-              <Slider
-                value={[strokeWidth]}
-                onValueChange={handleStrokeWidthChange}
-                max={20}
-                min={1}
-                step={1}
-                className="flex-1"
-              />
-              <span className="text-xs text-gray-500 w-8">20px</span>
-            </div>
-            <div className="text-center mt-1">
-              <span className="text-xs text-[#00E5FF]">{strokeWidth}px</span>
-            </div>
-          </div>
-
-          {/* Color Palette */}
-          <div>
-            <label className="text-xs text-gray-400 mb-2 block">COLOR</label>
-            <div className="grid grid-cols-4 gap-2">
-              {colors.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => handleColorSelect(color)}
-                  className={cn(
-                    "w-8 h-8 rounded border-2 transition-all hover:scale-110",
-                    strokeColor === color ? "border-white shadow-lg" : "border-gray-600 hover:border-gray-400",
-                  )}
-                  style={{ backgroundColor: color }}
-                  title={color}
-                />
-              ))}
-            </div>
-            <div className="mt-2 text-center">
-              <span className="text-xs text-gray-400">Selected: </span>
-              <span className="text-xs text-[#00E5FF] font-mono">{strokeColor}</span>
-            </div>
-          </div>
+        <div className="mt-2">
+          <input
+            type="color"
+            value={drawingColor}
+            onChange={(e) => setDrawingColor(e.target.value)}
+            className="w-full h-8 rounded border border-gray-300"
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <Separator />
+
+      {/* Stroke Width */}
+      <div>
+        <div className="text-xs font-medium mb-2">Stroke Width: {strokeWidth}px</div>
+        <Slider
+          value={[strokeWidth]}
+          onValueChange={(value) => setStrokeWidth(value[0])}
+          min={1}
+          max={20}
+          step={1}
+          className="w-full"
+        />
+      </div>
+
+      <Separator />
+
+      {/* Opacity */}
+      <div>
+        <div className="text-xs font-medium mb-2">Opacity: {Math.round(opacity * 100)}%</div>
+        <Slider
+          value={[opacity]}
+          onValueChange={(value) => setOpacity(value[0])}
+          min={0.1}
+          max={1}
+          step={0.1}
+          className="w-full"
+        />
+      </div>
+    </div>
   )
 }
