@@ -56,6 +56,12 @@ const nextConfig = {
       canvas: 'canvas',
     })
 
+    // Add alias for '@'
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, './'),
+    }
+
     return config
   },
   headers: async () => {
